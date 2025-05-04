@@ -297,6 +297,9 @@ async def load(ctx, *, file_name):
 
 @bot.command()
 async def recommend(ctx, *, query):
+    guild_id = ctx.guild.id
+    if guild_id not in queues:
+        queues[guild_id] = []
     await ctx.send("Finding recommended songs...")
     data = query.split("-")
     data = [x.strip() for x in data]
@@ -320,19 +323,16 @@ async def recommend(ctx, *, query):
     results = response.json()
     similar_tracks = results.get("similartracks", {}).get("track", [])
 
-    if isinstance(similar_tracks, dict):
-        similar_tracks = [similar_tracks]
-
     if not similar_tracks:
         await ctx.send("No similar tracks found :(")
         return
 
     messages = []
     for track in similar_tracks:
-        search_query = f"{track['name']} by {track['artists'][0]['name']}"
+        search_query = f"{track['name']} by {track['artist']['name']}"
         await ctx.send(search_query)
         url, title = get_audio_source(search_query)
-        queues[ctx.guild.id].append((url, title, ctx.author.id))
+        queues[guild_id].append((url, title, ctx.author.id))
 
 
 # LAST.FM API keys for music recommending
