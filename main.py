@@ -12,11 +12,12 @@ import requests
 
 
 # MuzakBot ~ D. Payne 2025
-# TODO - user guide / readme
+# TODO - user guide
 # TODO - queue saving / loading !!
 #   Store as json or sqlite table?
 # TODO - persistent queues !!
-# TODO - volume control
+# TODO - improve queue command
+# TODO - volume control fix
 
 
 # Reads user messages with discord.py module
@@ -83,9 +84,9 @@ def create_ffmpeg_source(url):
 async def play_next(ctx, guild_id):
     # Plays the next song
 
-    # ctx is some variable that the python library uses to pass data.
-    # We can do things like ctx.send to send messages using the bot, or ctx.invoke to run another func
-    # guild_id is the server's ID
+    # ctx is some object that the python library uses to pass data.
+    # We can do things like ctx.send to send chat messages using the bot, or ctx.invoke to run another func
+    # guild_id is the server's ID, used to get the queue; the queues are stored per-server.
 
     if queues[guild_id]:
         # If we have a non-empty queue, we remove the song and
@@ -342,75 +343,3 @@ last_secret = keys[1]
 # Runs the bot when this file is running
 bot.run(keys[2])
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# CODE GRAVEYARD ------------------------------------------------------------------------------------------------------
-
-
-"""
-# FROM
-@bot.command()
-async def recommend(ctx, *, query):
-    
-    if "open.spotify.com/track" in query:
-        track_id = query.split("/")[-1].split("?")[0]
-    else:
-        results = sp.search(q=query, type='track', limit=1)
-        if not results['tracks']['items']:
-            await ctx.send("Couldn't find that track on Spotify.")
-            return
-        track_id = results['tracks']['items'][0]['id']
-    track_id = "3n3Ppam7vgaVa1iaRUc9Lp"
-    recommendations = sp.recommendations(seed_tracks=[track_id], limit=5)
-    
-    guild_id = ctx.guild.id
-    if guild_id not in queues:
-        queues[guild_id] = []
-    
-    added_titles = []
-    for track in recommendations['tracks']:
-        search_query = f"{track['name']} by {track['artists'][0]['name']}"
-        url, title = get_audio_source(search_query)
-        if url:
-            queues[guild_id].append((url, title, ctx.author.id))
-            added_titles.append(title)
-    
-    if added_titles:
-        await ctx.send(f"Queued based on recommendations:\n" + "\n".join(f"- {t}" for t in added_titles))
-    else:
-        await ctx.send("Couldn't queue any recommended tracks.")"""
-
-"""    try:
-        # wait_for block
-        reaction, user = await bot.wait_for(
-            "reaction_add",
-            timeout=30.0,
-            check=lambda r, u: any(r.message.id == m.id for m, _ in messages) and str(r.emoji) == "➕" and u == ctx.author
-        )
-
-        reacted_message = reaction.message
-        track_str = reacted_message.content
-        track = [x.strip() for x in track_str.split("-")]
-        url, title = get_audio_source(f"{track[0]} - {track[1]}")
-        queues[ctx.guild.id].append((url, title, ctx.author.id))
-        await ctx.send(f"Queuing... {track[0]} - {track[1]}")
-
-    except asyncio.TimeoutError:
-        pass
-"""
