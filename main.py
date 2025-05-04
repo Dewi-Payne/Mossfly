@@ -48,6 +48,7 @@ def get_audio_source(query):
         "quiet": True,
         "default_search": "ytsearch",
         "source_address": "0.0.0.0"
+
     }
 
     # Safety check in case it's a lik
@@ -71,7 +72,7 @@ def create_ffmpeg_source(url):
     # Function that gets the audio stream for the bot to play
     ffmpeg_options = {
         "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-        "options": "-vn"  # disable video
+        "options": "-vn -acodec libopus -b:a 96k -f opus"
     }
     return FFmpegOpusAudio(url, **ffmpeg_options)
 
@@ -329,8 +330,8 @@ async def recommend(ctx, *, query):
 
     messages = []
     for track in similar_tracks:
-        search_query = f"{track['name']} by {track['artist']['name']}"
         await ctx.send(search_query)
+        search_query = f"{track['name']} by {track['artist']['name']}"
         url, title = get_audio_source(search_query)
         queues[guild_id].append((url, title, ctx.author.id))
 
