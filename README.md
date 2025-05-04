@@ -1,42 +1,42 @@
-#Mossfly Bot
+# Mossfly Bot
 
-A local discord bot that can play music from YouTube.
+A local python discord bot that can play music from YouTube.
 
-##Installation
+## Installation
 This bot requires *last.fm* and *discord* API keys to run in a file"api_keys.txt" stored in the same directory as the python file.
 
 
 
-##Commands and Features
+## Commands and Features
 Commands are triggered with an exclamation mark.   
-###Untested
+### Untested
 ❕Pause / ❕Resume    
-Used to pause and unpause the audio.
-❕Queuetop [song]   
-Puts a song at the front of the queue.
-❕Play [song]   
-Plays a provided song or adds it to the queue.   
-❕Undo   
-Undoes a queued song.    
-❕Skip   
-Skips the currently playing song.    
-❕Stop   
-Stops playing and clears the queue.    
-❕Shuffle    
-Shuffles the queue.   
-❕Deletequeue    
-Command so nice I made it twice (see stop)    
-❕Queue   
-Shows the current queue.
-❕Recommend [song artist - title]      
-Queues up to 5 recommended songs based on a given song.    
+Used to pause and unpause the audio.    
+❕Queuetop [song]    
+Puts a song at the front of the queue.        
+❕Play [song]      
+Plays a provided song or adds it to the queue.     
+❕Undo     
+Undoes a queued song.      
+❕Skip    
+Skips the currently playing song.      
+❕Stop      
+Stops playing and clears the queue.      
+❕Shuffle      
+Shuffles the queue.     
+❕Deletequeue       
+Command so nice I made it twice (see stop)     
+❕Queue     
+Shows the current queue.    
+❕Recommend [song artist - title]        
+Queues up to 5 recommended songs based on a given song.      
 
-###Known Issues
+### Known Issues
 ❕Volume    
 Used to change the bot's output volume.    
-Known issue: Not properly implemented.     
+Known issue: Not properly implemented.      
 
-##Features to add
+## Features to add
 ❔ A method of saving or loading queues as playlists.    
 ❔ Persistent queue - remembers your queue after disconnecting or stopping.       
 ➕ Better queue command: option for pages, removing individual songs.     
