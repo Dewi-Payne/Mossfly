@@ -11,7 +11,7 @@ This bot requires *last.fm* and *discord* API keys to run in a file"api_keys.txt
 Commands are triggered with an exclamation mark.   
 ### Untested
 ❕Pause / ❕Resume    
-Used to pause and unpause the audio.
+Used to pause and unpause the audio.    
 ❕Queuetop [song]    
 Puts a song at the front of the queue.        
 ❕Play [song]      
