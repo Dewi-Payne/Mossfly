@@ -267,7 +267,7 @@ async def play(ctx, *, query):
     if not ctx.voice_client:
         await ctx.invoke(join)
 
-    url, title = get_audio_source_async(query)
+    url, title = await get_audio_source_async(query)
     if not url:
         await ctx.send("Err: Audio source not found.")
         return
