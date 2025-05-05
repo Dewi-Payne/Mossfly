@@ -40,6 +40,11 @@ with open("api_keys.txt", "r+") as file:
 # ======================== #
 
 
+async def get_audio_source_async(query):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, get_audio_source, query)
+
+
 def get_audio_source(query):
     # Search/Audio playback using the lib yt_dlp
     ydl_opts = {
@@ -48,7 +53,6 @@ def get_audio_source(query):
         "quiet": True,
         "default_search": "ytsearch",
         "source_address": "0.0.0.0"
-
     }
 
     # Safety check in case it's a lik
@@ -82,13 +86,10 @@ def create_ffmpeg_source(url):
 # ======================= #
 
 
-async def play_next(ctx, guild_id):
-    # Plays the next song
-
-    # ctx is some object that the python library uses to pass data.
-    # We can do things like ctx.send to send chat messages using the bot, or ctx.invoke to run another func
-    # guild_id is the server's ID, used to get the queue; the queues are stored per-server.
-
+async def play_next(ctx):
+    guild_id = ctx.guild.id
+    if guild_id not in queues:
+        queues[guild_id] = []
     if queues[guild_id]:
         # If we have a non-empty queue, we remove the song and
         # update the source to the new song (i.e. the next url)
@@ -96,16 +97,13 @@ async def play_next(ctx, guild_id):
         now_playing[guild_id] = (title, user_id)
         source = create_ffmpeg_source(url)
         vc = ctx.voice_client
-        vc.play(source, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx, guild_id), bot.loop))  # What does this do? We may never know.
+        vc.play(source, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx),
+                                                                         bot.loop))  # What does this do? We may never know.
         await ctx.send(f"Now playing: **{title}**")
 
     else:  # If the queue *is* empty, DC
-        await asyncio.sleep(60)  # Wait for 60 seconds
-
-        # Check again in case something was queued during the delay
-        if not queues[guild_id]:
-            now_playing.pop(guild_id, None)
-            await ctx.voice_client.disconnect()
+        now_playing.pop(guild_id, None)
+        await ctx.voice_client.disconnect()
 
 
 # ================================= #
@@ -161,7 +159,7 @@ async def queuetop(ctx, *, query):
     await ctx.send(f"Putting at front of queue...: {title}")
 
     if not ctx.voice_client.is_playing():
-        await play_next(ctx, guild_id)
+        await play_next(ctx)
 
 
 @bot.command()
@@ -201,7 +199,7 @@ async def play(ctx, *, query):
     await ctx.send(f"Queuing...: {title}")
 
     if not ctx.voice_client.is_playing():
-        await play_next(ctx, guild_id)
+        await play_next(ctx)
 
 
 @bot.command()
@@ -278,24 +276,6 @@ async def queue(ctx):
     await ctx.send(description)
 
 
-
-"""@bot.command()
-async def save(ctx, *, file_name):
-    url, title, user_id = queues[ctx.guild_id]
-    with open("playlists.json", "w") as f:
-        f.writelines(str(url, title, user_id))
-        f.close()
-
-
-@bot.command()
-async def load(ctx, *, file_name):
-    url, title, user_id = queues[ctx.guild_id]
-    with open("playlists.json", "w") as f:
-        f.writelines(str(url, title, user_id))
-        f.close()
-"""
-
-
 @bot.command()
 async def recommend(ctx, *, query):
     guild_id = ctx.guild.id
@@ -330,10 +310,14 @@ async def recommend(ctx, *, query):
 
     messages = []
     for track in similar_tracks:
-        await ctx.send(search_query)
         search_query = f"{track['name']} by {track['artist']['name']}"
-        url, title = get_audio_source(search_query)
+        url, title = await get_audio_source_async(search_query)
         queues[guild_id].append((url, title, ctx.author.id))
+
+    if not ctx.voice_client:
+        await ctx.invoke(join)
+    if not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
+        await play_next(ctx)
 
 
 # LAST.FM API keys for music recommending
@@ -343,4 +327,3 @@ last_secret = keys[1]
 
 # Runs the bot when this file is running
 bot.run(keys[2])
-
