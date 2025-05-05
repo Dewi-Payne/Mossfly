@@ -9,6 +9,8 @@ from spotipy import Spotify
 from spotipy.oauth2 import SpotifyClientCredentials
 import json
 import requests
+import logging
+import time
 
 
 # MuzakBot ~ D. Payne 2025
@@ -31,28 +33,53 @@ queues = {}
 now_playing = {}
 
 
+# Logging setuo
+logging.basicConfig(
+    level=logging.DEBUG,  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
+
+
+def log_duration(name):
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            start = time.perf_counter()
+            result = await func(*args, **kwargs)
+            end = time.perf_counter()
+            logger.debug(f"{name} took {end - start:.2f} seconds")
+            return result
+        return wrapper
+    return decorator
+
+
+# Reading API keys
 with open("api_keys.txt", "r+") as file:
+    #logger.debug("reading keys")
     keys = file.readlines()
 
 
-# ======================== #
-# ===== AUDIO SEARCH ===== #
-# ======================== #
+# ================================== #
+# ========== AUDIO SEARCH ========== #
+# ================================== #
 
-
+@log_duration("get_audio_source_async")
 async def get_audio_source_async(query):
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, get_audio_source, query)
 
 
 def get_audio_source(query):
+    #logger.debug(f"grabbing audio source. Query: {query}")
     # Search/Audio playback using the lib yt_dlp
+    start_time = time.perf_counter()
     ydl_opts = {
-        "format": "bestaudio",
+        "format": "bestaudio[ext=m4a]/bestaudio/best",
         "noplaylist": True,
         "quiet": True,
         "default_search": "ytsearch",
-        "source_address": "0.0.0.0"
+        "source_address": "0.0.0.0",
     }
 
     # Safety check in case it's a lik
@@ -66,27 +93,35 @@ def get_audio_source(query):
             info = ydl.extract_info(query, download=False)  # Just stream it (I think it's usually used for downloading)
             if "entries" in info:
                 info = info["entries"][0]  # First search choice
+            duration = time.perf_counter() - start_time
+            logger.debug(f"Audio source found in {duration:.2f} seconds")
             return info["url"], info["title"]
         except Exception as e:
-            print(f"Search Error: {e}")
+            logger.warning(f"Search Error: {e}")
             return None, None
 
 
 def create_ffmpeg_source(url):
     # Function that gets the audio stream for the bot to play
+    start_time = time.perf_counter()
+    #logger.debug("creating ffmeg source...")
     ffmpeg_options = {
         "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
         "options": "-vn -acodec libopus -b:a 96k -f opus"
     }
+    duration = time.perf_counter() - start_time
+    logger.debug(f"Audio source created in {duration:.2f} seconds")
     return FFmpegOpusAudio(url, **ffmpeg_options)
 
 
-# ======================= #
-# ==== PLAYER CONFIG ==== #
-# ======================= #
+# ================================= #
+# ========= PLAYER CONFIG ========= #
+# ================================= #
 
 
+@log_duration("play_next")
 async def play_next(ctx):
+    #logger.debug("play_next triggered...")
     guild_id = ctx.guild.id
     if guild_id not in queues:
         queues[guild_id] = []
@@ -102,22 +137,28 @@ async def play_next(ctx):
         await ctx.send(f"Now playing: **{title}**")
 
     else:  # If the queue *is* empty, DC
+        #logger.info("queue empty, disconnecting.")
         now_playing.pop(guild_id, None)
         await ctx.voice_client.disconnect()
 
 
-# ================================= #
-# ===== BOT EVENTS + COMMANDS ===== #
-# ================================= #
+# =========================================== #
+# ========== BOT EVENTS + COMMANDS ========== #
+# =========================================== #
 
+
+@log_duration("on_ready")
 @bot.event
 async def on_ready():
+    logger.info("on_ready")
     # Login event
     print(f"me {bot.user}")
 
 
+@log_duration("pause")
 @bot.command()
 async def pause(ctx):
+    #logger.info("pause command read")
     if ctx.voice_client:
         if not ctx.voice_client.is_playing():
             await ctx.send("Nothing is playing")
@@ -125,18 +166,24 @@ async def pause(ctx):
             await ctx.send("Already paused")
         else:
             ctx.voice_client.pause()
+            logger.info("paused")
             await ctx.send("Paused")
 
 
+@log_duration("resume")
 @bot.command()
 async def resume(ctx):
+    logger.info("resume command read")
     if ctx.voice_client:
         ctx.voice_client.resume()
+        logger.info("resumed")
         await ctx.send("Resuming...")
 
 
+@log_duration("queuetop")
 @bot.command()
 async def queuetop(ctx, *, query):
+    logger.info("queuetop command read")
     if not ctx.voice_client:
         await ctx.invoke(join)
 
@@ -162,27 +209,35 @@ async def queuetop(ctx, *, query):
         await play_next(ctx)
 
 
+@log_duration("topqueue")
 @bot.command()
 async def topqueue(*args, **kwargs):
+    logger.info("topqueue command read")
     await queuetop(*args, **kwargs)
 
 
+@log_duration("volume")
 @bot.command()
 async def volume(ctx, *, vol):
+    logger.info("volume command read")
     if ctx.voice_client.is_playing():
         await ctx.voice_client.volume(int(vol))
 
 
+@log_duration("join")
 @bot.command()
 async def join(ctx):
+    logger.info("join command read")
     if ctx.author.voice:
         await ctx.author.voice.channel.connect()
     else:
         await ctx.send("You're not in a voice channel >:(")
 
 
+@log_duration("play")
 @bot.command()
 async def play(ctx, *, query):
+    #logger.info("play command read")
     if not ctx.voice_client:
         await ctx.invoke(join)
 
@@ -191,12 +246,13 @@ async def play(ctx, *, query):
         await ctx.send("Err: Audio source not found.")
         return
 
+    await ctx.send(f"Queuing...: {title}")
+
     guild_id = ctx.guild.id
     if guild_id not in queues:
         queues[guild_id] = []
 
     queues[guild_id].append((url, title, ctx.author.id))
-    await ctx.send(f"Queuing...: {title}")
 
     if not ctx.voice_client.is_playing():
         await play_next(ctx)
@@ -204,35 +260,44 @@ async def play(ctx, *, query):
 
 @bot.command()
 async def skip(ctx):
+    #logger.info("skip command read")
     if ctx.voice_client and ctx.voice_client.is_playing():
         ctx.voice_client.stop()
         await ctx.send("Skipping...")
 
 
+@log_duration("stop")
 @bot.command()
 async def stop(ctx):
+    #logger.info("stop command read")
     if ctx.voice_client:
         queues[ctx.guild.id] = []
         await ctx.voice_client.disconnect()
         await ctx.send("Stopping...")
 
 
+@log_duration("shuffle")
 @bot.command()
 async def shuffle(ctx):
+    #logger.info("shuffle command read")
     if ctx.voice_client and ctx.voice_client.is_playing() and len(queues[ctx.guild.id]) > 1:
         random.shuffle(queues[ctx.guild.id])
         await ctx.send("Shuffling queue.")
 
 
+@log_duration("deletequeue")
 @bot.command()
 async def deletequeue(ctx):
+    #logger.info("deletequeue command read")
     if ctx.voice_client and ctx.voice_client.is_playing():
         queues[ctx.guild.id] = []
         await ctx.send("Deleting queue.")
 
 
+@log_duration("undo")
 @bot.command()
 async def undo(ctx):
+    logger.info("undo command read")
     guild_id = ctx.guild.id
     if guild_id not in queues or not queues[guild_id]:
         await ctx.send("There's nothing in the queue.")
@@ -250,6 +315,8 @@ async def undo(ctx):
 
 @bot.command()
 async def queue(ctx):
+    #logger.info("queue command read")
+    start_time = time.perf_counter()
     guild_id = ctx.guild.id
     queue_list = queues.get(guild_id, [])
     now = now_playing.get(guild_id)
@@ -271,17 +338,21 @@ async def queue(ctx):
             description += f"{i}.  {title}    [{user.name}]\n"
 
         if len(queue_list) > 10:
-            description += f"\n+ {len(queue_list) - 10} more." 
+            description += f"\n+ {len(queue_list) - 10} more."
 
     await ctx.send(description)
 
+    duration = time.perf_counter() - start_time
+    logger.debug(f"Queue took {duration:.2f} seconds")
 
+
+@log_duration("recommend")
 @bot.command()
 async def recommend(ctx, *, query):
+    await ctx.send("Finding recommended songs...")
     guild_id = ctx.guild.id
     if guild_id not in queues:
         queues[guild_id] = []
-    await ctx.send("Finding recommended songs...")
     data = query.split("-")
     data = [x.strip() for x in data]
     if len(data) != 2:
@@ -307,17 +378,18 @@ async def recommend(ctx, *, query):
     if not similar_tracks:
         await ctx.send("No similar tracks found :(")
         return
+    if not ctx.voice_client:
+        await ctx.invoke(join)
 
     messages = []
     for track in similar_tracks:
         search_query = f"{track['name']} by {track['artist']['name']}"
         url, title = await get_audio_source_async(search_query)
         queues[guild_id].append((url, title, ctx.author.id))
+        await ctx.send(f"Queueing: {title}")
+        if not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
+            await play_next(ctx)
 
-    if not ctx.voice_client:
-        await ctx.invoke(join)
-    if not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
-        await play_next(ctx)
 
 
 # LAST.FM API keys for music recommending
@@ -327,3 +399,4 @@ last_secret = keys[1]
 
 # Runs the bot when this file is running
 bot.run(keys[2])
+logger.info("Bot running...")
