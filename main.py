@@ -11,6 +11,7 @@ import json
 import requests
 import logging
 import time
+from googleapiclient.discovery import build
 
 
 # MuzakBot ~ D. Payne 2025
@@ -58,47 +59,72 @@ def log_duration(name):
 with open("api_keys.txt", "r+") as file:
     #logger.debug("reading keys")
     keys = file.readlines()
-
+YOUTUBE_API_KEY = keys[3]
+YOUTUBE_API_SERVICE_NAME = "youtube"
+YOUTUBE_API_VERSION = "v3"
 
 # ================================== #
 # ========== AUDIO SEARCH ========== #
 # ================================== #
 
+
+def search_youtube(query):
+    youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=YOUTUBE_API_KEY)
+
+    request = youtube.search().list(
+        q=query,
+        part="id,snippet",
+        maxResults=1,
+        type="video"
+    )
+
+    response = request.execute()
+
+    if response["items"]:
+        video_id = response["items"][0]["id"]["videoId"]
+        return f"https://www.youtube.com/watch?v={video_id}"
+    else:
+        return None
+
+
 @log_duration("get_audio_source_async")
 async def get_audio_source_async(query):
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, get_audio_source, query)
+    return await asyncio.to_thread(get_audio_source, query)
 
 
 def get_audio_source(query):
-    #logger.debug(f"grabbing audio source. Query: {query}")
-    # Search/Audio playback using the lib yt_dlp
     start_time = time.perf_counter()
+
+    # Use YouTube API to search if the query is not a direct URL
+    if "youtube.com" not in query and "youtu.be" not in query:
+        query = search_youtube(query)
+        if not query:
+            logger.warning("No results found via YouTube API.")
+            return None, None
+
     ydl_opts = {
         "format": "bestaudio[ext=m4a]/bestaudio/best",
-        "noplaylist": True,
         "quiet": True,
-        "default_search": "ytsearch",
+        "noplaylist": True,
         "source_address": "0.0.0.0",
+        "nocheckcertificate": True,
+        "extract_flat": "in_playlist",  # speeds up playlist queries
+        "skip_download": True,
+        "cachedir": False,
+        "forceurl": True,  # avoids unnecessary metadata parsing
+        "forcejson": True,
     }
-
-    # Safety check in case it's a lik
-    if "youtube.com" in query or "youtu.be" in query:
-        ydl_opts['default_search'] = 'ytsearch'
-    elif "soundcloud.com" in query:
-        ydl_opts['default_search'] = 'scloudsearch'
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
-            info = ydl.extract_info(query, download=False)  # Just stream it (I think it's usually used for downloading)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(query, download=False)
             if "entries" in info:
-                info = info["entries"][0]  # First search choice
+                info = info["entries"][0]
             duration = time.perf_counter() - start_time
-            logger.debug(f"Audio source found in {duration:.2f} seconds")
-            return info["url"], info["title"]
-        except Exception as e:
-            logger.warning(f"Search Error: {e}")
-            return None, None
+            logger.debug(f"Audio source resolved in {duration:.2f} seconds")
+            return info["url"], info.get("title", "Unknown Title")
+    except Exception as e:
+        logger.warning(f"yt-dlp extraction failed: {e}")
+        return None, None
 
 
 def create_ffmpeg_source(url):
@@ -187,7 +213,7 @@ async def queuetop(ctx, *, query):
     if not ctx.voice_client:
         await ctx.invoke(join)
 
-    url, title = get_audio_source(query)
+    url, title = get_audio_source_async(query)
     if not url:
         await ctx.send("Err: Audio source not found.")
         return
@@ -241,7 +267,7 @@ async def play(ctx, *, query):
     if not ctx.voice_client:
         await ctx.invoke(join)
 
-    url, title = get_audio_source(query)
+    url, title = get_audio_source_async(query)
     if not url:
         await ctx.send("Err: Audio source not found.")
         return
