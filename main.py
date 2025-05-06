@@ -163,9 +163,9 @@ async def play_next(ctx):
         await ctx.send(f"Now playing: **{title}**")
 
     else:  # If the queue *is* empty, DC
-        #logger.info("queue empty, disconnecting.")
-        now_playing.pop(guild_id, None)
-        await ctx.voice_client.disconnect()
+        logger.info("queue empty, disconnecting.")
+        #now_playing.pop(guild_id, None)
+        #await ctx.voice_client.disconnect()
 
 
 # =========================================== #
